@@ -1,11 +1,11 @@
+# text_extract_api/extract/strategies/strategy.py - Clean version
+
 from __future__ import annotations
 import os
 import yaml
 import importlib
 import pkgutil
 from typing import Type, Dict
-
-from pydantic.v1.typing import get_class
 
 from extract.extract_result import ExtractResult
 from text_extract_api.files.file_formats.file_format import FileFormat
@@ -27,25 +27,6 @@ class Strategy:
     def update_state(self, state, meta):
         if self.update_state_callback:
             self.update_state_callback(state, meta)
-
-
-    @classmethod
-def get_strategy(cls, name: str) -> Type["Strategy"]:
-    """Railway-safe strategy loading"""
-    
-    # In Railway mode, only allow basic strategies
-    if os.getenv('RAILWAY_ENVIRONMENT_NAME'):
-        if name in ['llama_vision', 'easyocr', 'docling']:
-            # Return a mock strategy for Railway
-            from text_extract_api.extract.strategies.mock import MockStrategy
-            return MockStrategy()
-        else:
-            raise ValueError(f"Strategy '{name}' not available in Railway demo mode")
-    
-    # Original logic for non-Railway environments
-    if name not in cls._strategies:
-        cls.load_strategies_from_config()
-    # ... rest of original method
 
     @classmethod
     def name(cls) -> str:
@@ -109,14 +90,18 @@ def get_strategy(cls, name: str) -> Type["Strategy"]:
 
             strategy_class_path = strategy_config['class']
             module_path, class_name = strategy_class_path.rsplit('.', 1)
-            module = importlib.import_module(module_path)
-
-            strategy = getattr(module, class_name)
-            strategy_instance = strategy()
-            strategy_instance.set_strategy_config(strategy_config)
             
-            cls.register_strategy(strategy_instance, strategy_name)
-            print(f"Loaded strategy from {config_file_path} {strategy_name} [{strategy_class_path}]")
+            try:
+                module = importlib.import_module(module_path)
+                strategy = getattr(module, class_name)
+                strategy_instance = strategy()
+                strategy_instance.set_strategy_config(strategy_config)
+                
+                cls.register_strategy(strategy_instance, strategy_name)
+                print(f"Loaded strategy from {config_file_path} {strategy_name} [{strategy_class_path}]")
+            except ImportError as e:
+                print(f"Warning: Could not load strategy {strategy_name}: {e}")
+                continue
 
         return strategies
 
@@ -144,6 +129,7 @@ def get_strategy(cls, name: str) -> Type["Strategy"]:
                 except ImportError as e:
                     print('Error loading strategy ' + submodule_info.name + ': ' + str(e))
                     continue
+                    
                 for attr_name in dir(ocr_module):
                     attr = getattr(ocr_module, attr_name)
                     if (isinstance(attr, type)
@@ -154,8 +140,5 @@ def get_strategy(cls, name: str) -> Type["Strategy"]:
                         strategies[attr.name()] = attr()
                         print(f"Discovered strategy {attr.name()} from {submodule_info.name} [{module_info.name}]")
 
-
         cls._strategies = strategies
-
-
-
+        return strategies
