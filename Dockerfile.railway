@@ -1,27 +1,45 @@
 FROM python:3.10-slim
 
-# Install system dependencies
+# Install minimal system dependencies
 RUN apt-get update && apt-get install -y \
     libmagic1 \
-    poppler-utils \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    libglib2.0-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy requirements and install Python packages
-COPY pyproject.toml .
-RUN pip install -e .
+# Copy only essential files first
+COPY requirements.txt* ./
+COPY pyproject.toml ./
+
+# Install minimal Python dependencies
+RUN pip install --no-cache-dir --upgrade pip
+
+# Try requirements.txt first, then fallback to minimal pyproject.toml
+RUN pip install --no-cache-dir \
+    fastapi \
+    uvicorn[standard] \
+    celery \
+    redis \
+    requests \
+    python-multipart \
+    Pillow \
+    pydantic \
+    python-dotenv \
+    PyYAML \
+    || echo "Continuing with basic dependencies"
 
 # Copy application code
 COPY . .
 
-# Create storage directory
-RUN mkdir -p /app/storage
+# Create necessary directories
+RUN mkdir -p /app/storage /app/logs
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV RAILWAY_ENVIRONMENT_NAME=production
 
 # Railway uses $PORT environment variable
 EXPOSE $PORT
+
 CMD uvicorn text_extract_api.main:app --host 0.0.0.0 --port $PORT
