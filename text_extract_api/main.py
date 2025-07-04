@@ -6,6 +6,53 @@ from typing import Optional
 
 import ollama
 import redis
+import os
+import sys
+
+# Railway-specific configuration - disable heavy dependencies
+RAILWAY_ENV = os.getenv('RAILWAY_ENVIRONMENT_NAME') is not None
+
+if RAILWAY_ENV:
+    print("🚂 Railway mode: Disabling heavy dependencies for initial deployment")
+    
+    # Mock Ollama
+    class MockOllama:
+        @staticmethod
+        def generate(model, prompt):
+            return {"response": "OCR processing disabled in Railway demo mode. Please configure Ollama service."}
+        
+        @staticmethod
+        def pull(model):
+            return {"status": "Model pull disabled in Railway demo mode"}
+        
+        class ResponseError(Exception):
+            def __init__(self, message):
+                self.error = message
+                self.status_code = 404
+    
+    # Mock other heavy imports
+    class MockEasyOCR:
+        def __init__(self, *args, **kwargs):
+            pass
+        def readtext(self, *args, **kwargs):
+            return ["OCR disabled in Railway mode"]
+    
+    class MockModule:
+        def __getattr__(self, name):
+            return lambda *args, **kwargs: "Disabled in Railway mode"
+    
+    # Replace heavy imports
+    sys.modules['ollama'] = type(sys)('ollama')
+    sys.modules['ollama'].generate = MockOllama.generate
+    sys.modules['ollama'].pull = MockOllama.pull
+    sys.modules['ollama'].ResponseError = MockOllama.ResponseError
+    
+    sys.modules['easyocr'] = type(sys)('easyocr')
+    sys.modules['easyocr'].Reader = MockEasyOCR
+    
+    # Mock other modules that might cause issues
+    for module_name in ['pdf2image', 'cv2', 'docling', 'transformers']:
+        sys.modules[module_name] = MockModule()
 from celery.result import AsyncResult
 from fastapi import FastAPI, Form, UploadFile, File, HTTPException
 from pydantic import BaseModel, Field, field_validator
