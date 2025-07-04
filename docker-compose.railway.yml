@@ -1,0 +1,35 @@
+version: '3.8'
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.railway
+    ports:
+      - "${PORT:-8000}:${PORT:-8000}"
+    environment:
+      - APP_ENV=production
+      - REDIS_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${REDIS_URL}
+      - CELERY_RESULT_BACKEND=${REDIS_URL}
+      - STORAGE_PROFILE_PATH=/app/storage_profiles
+    depends_on:
+      - redis
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.railway
+    command: celery -A text_extract_api.celery_app worker --loglevel=info --pool=solo
+    environment:
+      - APP_ENV=production
+      - REDIS_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${REDIS_URL}
+      - CELERY_RESULT_BACKEND=${REDIS_URL}
+      - STORAGE_PROFILE_PATH=/app/storage_profiles
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7.2.4-alpine
+    ports:
+      - "6379:6379"
