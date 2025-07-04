@@ -28,6 +28,25 @@ class Strategy:
         if self.update_state_callback:
             self.update_state_callback(state, meta)
 
+
+    @classmethod
+def get_strategy(cls, name: str) -> Type["Strategy"]:
+    """Railway-safe strategy loading"""
+    
+    # In Railway mode, only allow basic strategies
+    if os.getenv('RAILWAY_ENVIRONMENT_NAME'):
+        if name in ['llama_vision', 'easyocr', 'docling']:
+            # Return a mock strategy for Railway
+            from text_extract_api.extract.strategies.mock import MockStrategy
+            return MockStrategy()
+        else:
+            raise ValueError(f"Strategy '{name}' not available in Railway demo mode")
+    
+    # Original logic for non-Railway environments
+    if name not in cls._strategies:
+        cls.load_strategies_from_config()
+    # ... rest of original method
+
     @classmethod
     def name(cls) -> str:
         raise NotImplementedError("Strategy subclasses must implement name")
